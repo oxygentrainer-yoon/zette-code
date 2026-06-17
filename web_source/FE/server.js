@@ -5,6 +5,9 @@ const TOTAL_TIME = 5 * 60 * 1000;
 const sessionStartTime = Date.now();
 const ROOM_CAPACITY = 2;
 
+const axios = require('axios');
+const FILTER_SERVICE_URL = 'http://127.0.0.1:4000/filter';
+
 const sharedState = {
     isInhaling: false,
     inhalingSince: null
@@ -143,7 +146,7 @@ wss.on('connection', (ws) => {
     sendInitialState(ws);
     broadcastRoomInfo(room);
 
-    ws.on('message', (message) => {
+    ws.on('message', async (message) => {
         let data;
         try {
             data = JSON.parse(message.toString());
@@ -153,11 +156,39 @@ wss.on('connection', (ws) => {
         }
 
         if (data.type === 'chat') {
-            broadcastToRoom(ws, {
-                type: 'chat',
-                message: String(data.message || '').slice(0, 20),
-                serverTime: Date.now()
-            });
+            const originalMessage = String(data.message || '').slice(0, 20);
+
+            try {
+                const filterResult = await axios.post(FILTER_SERVICE_URL, {
+                    message: originalMessage,
+                    roomId: ws.roomId
+                });
+
+                if (!filterResult.data.allowed) {
+                    sendJson(ws, {
+                        type: 'chat_blocked',
+                        reason: filterResult.data.reason,
+                        matchedWord: filterResult.data.matchedWord,
+                        serverTime: Date.now()
+                    });
+                    return;
+                }
+
+                broadcastToRoom(ws, {
+                    type: 'chat',
+                    message: filterResult.data.message,
+                    serverTime: Date.now()
+                });
+            } catch (error) {
+                console.error('filter-service error:', error.message);
+
+                sendJson(ws, {
+                    type: 'chat_blocked',
+                    reason: 'filter_service_unavailable',
+                    serverTime: Date.now()
+                });
+            }
+
             return;
         }
 
