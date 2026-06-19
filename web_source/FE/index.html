@@ -339,7 +339,7 @@
             }
 
             if (data.type === 'chat') {
-                spawnMessageSmoke(data.message, toClientTime(data.serverTime));
+                spawnMessageSmoke(data.message,data.x,data.y,serverTime);
                 return;
             }
 

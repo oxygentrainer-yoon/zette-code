@@ -18,6 +18,11 @@ let nextRoomNumber = 1;
 
 const wss = new WebSocket.Server({ port: PORT });
 
+const {
+    writeDB,
+    fetchDB
+} = require('./services/fetchDB');
+
 console.log(`WebSocket server started on port ${PORT}`);
 console.log(`Shared session start time: ${new Date(sessionStartTime).toISOString()}`);
 
@@ -154,7 +159,71 @@ wss.on('connection', (ws) => {
             console.error('Invalid JSON received:', error);
             return;
         }
+        if (data.type === 'chat') {
 
+    const originalMessage =
+        String(data.message || '')
+            .trim()
+            .slice(0, 20);
+
+    try {
+
+        const filterResult = await axios.post(
+            FILTER_SERVICE_URL,
+            {
+                message: originalMessage,
+                roomId: ws.roomId
+            }
+        );
+
+        if (!filterResult.data.allowed) {
+
+            sendJson(ws, {
+                type: 'chat_blocked',
+                reason: filterResult.data.reason,
+                matchedWord: filterResult.data.matchedWord,
+                serverTime: Date.now()
+            });
+
+            return;
+        }
+
+        const savedMessage =
+            writeDB(filterResult.data.message);
+
+        broadcastToRoom(ws, {
+
+            type: 'chat',
+
+            id: savedMessage.id,
+
+            message: savedMessage.message,
+
+            x: savedMessage.x,
+            y: savedMessage.y,
+
+            serverTime:
+                savedMessage.createdAt
+        });
+
+    } catch (error) {
+
+        console.error(
+            'filter-service error:',
+            error.message
+        );
+
+        sendJson(ws, {
+            type: 'chat_blocked',
+            reason:
+                'filter_service_unavailable',
+            serverTime: Date.now()
+        });
+    }
+
+    return;
+}
+/*
         if (data.type === 'chat') {
             const originalMessage = String(data.message || '').slice(0, 20);
 
@@ -191,7 +260,7 @@ wss.on('connection', (ws) => {
 
             return;
         }
-
+*/
         if (data.type === 'inhale_start') {
             sharedState.isInhaling = true;
             sharedState.inhalingSince = Date.now();
