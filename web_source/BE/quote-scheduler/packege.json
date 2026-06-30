@@ -1,0 +1,14 @@
+{
+  "name": "quote-scheduler",
+  "version": "1.0.0",
+  "description": "tabacomyu - 名言定期配信サービス",
+  "main": "scheduler.js",
+  "scripts": {
+    "start": "node scheduler.js",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "axios": "^1.6.8"
+  }
+}
