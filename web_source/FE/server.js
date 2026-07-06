@@ -16,7 +16,10 @@ const sharedState = {
 const rooms = new Map();
 let nextRoomNumber = 1;
 
-const wss = new WebSocket.Server({ port: PORT });
+const wss = new WebSocket.Server({
+    port: PORT,
+    path: '/ws'
+});
 
 const {
     writeDB,

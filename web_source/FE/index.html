@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,16 +7,11 @@
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; user-select: none; }
-
         body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
+            margin: 0; padding: 0; overflow: hidden;
             background-color: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
             height: 100vh;
             font-family: 'VT323', monospace;
             color: #fff;
@@ -25,66 +20,29 @@
         #canvas {
             image-rendering: pixelated;
             image-rendering: crisp-edges;
-            width: 100vw;
-            height: 100vh;
+            width: 100vw; height: 100vh;
             display: block;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
+            position: absolute; top: 0; left: 0; z-index: 1;
             cursor: pointer;
         }
 
         .ui-layer {
-            position: relative;
-            z-index: 10;
-            width: 100%;
-            height: 100%;
+            position: relative; z-index: 10;
+            width: 100%; height: 100%;
             pointer-events: none;
         }
 
         #timer {
-            position: absolute;
-            top: 20px;
-            left: 50%;
+            position: absolute; top: 20px; left: 50%;
             transform: translateX(-50%);
-            font-size: 48px;
-            color: #222;
+            font-size: 48px; color: #222;
             text-shadow: 2px 2px #000;
         }
 
-        .status {
-            position: absolute;
-            top: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 20px;
-            color: #aaa;
-            text-shadow: 1px 1px #000;
-            pointer-events: none;
-            text-align: center;
-            white-space: pre-line;
-        }
-
-        .room-info {
-            position: absolute;
-            top: 120px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 18px;
-            color: #8fd3ff;
-            text-shadow: 1px 1px #000;
-            pointer-events: none;
-            text-align: center;
-        }
-
         .controls {
-            position: absolute;
-            bottom: 40px;
-            left: 50%;
+            position: absolute; bottom: 40px; left: 50%;
             transform: translateX(-50%);
-            display: flex;
-            align-items: center;
+            display: flex; align-items: center;
             background: #000;
             padding: 4px;
             border: 4px solid #fff;
@@ -93,41 +51,24 @@
         }
 
         input[type=text] {
-            background: #000;
-            border: none;
-            color: #fff;
-            font-family: 'VT323', monospace;
-            font-size: 20px;
-            padding: 8px 15px;
-            outline: none;
-            width: 280px;
+            background: #000; border: none; color: #fff;
+            font-family: 'VT323', monospace; font-size: 20px;
+            padding: 8px 15px; outline: none; width: 280px;
         }
 
         button {
-            background: #fff;
-            border: none;
-            color: #000;
-            font-family: 'VT323', monospace;
-            font-size: 18px;
-            font-weight: bold;
-            padding: 8px 20px;
-            cursor: pointer;
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+            background: #fff; border: none; color: #000;
+            font-family: 'VT323', monospace; font-size: 18px;
+            font-weight: bold; padding: 8px 20px; cursor: pointer;
         }
     </style>
 </head>
 <body>
+
     <canvas id="canvas" width="480" height="270"></canvas>
 
     <div class="ui-layer">
         <div id="timer">05:00</div>
-        <div id="status" class="status">CONNECTING...</div>
-        <div id="roomInfo" class="room-info">ROOM: ---</div>
-
         <div class="controls">
             <input type="text" id="msgInput" placeholder="SAY SOMETHING..." maxlength="20" autocomplete="off">
             <button id="sendBtn">SEND</button>
@@ -140,507 +81,236 @@
         const msgInput = document.getElementById('msgInput');
         const sendBtn = document.getElementById('sendBtn');
         const timerText = document.getElementById('timer');
-        const statusText = document.getElementById('status');
-        const roomInfoText = document.getElementById('roomInfo');
+
+        const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+
+        socket.onopen = () => {
+            console.log('WebSocket connected');
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'chat') {
+                const ratio = Math.min((Date.now() - startTime) / TOTAL_TIME, 1);
+                const burnLen = (CIG.fullLen - CIG.filterLen) * ratio;
+                const spawnY = (CIG.baseY - CIG.fullLen + burnLen) - 10;
+
+                messages.push(new MessageSmoke(data.message, canvas.width / 2, spawnY));
+            }
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
 
         ctx.imageSmoothingEnabled = false;
 
-        let messages = [];
-        let bgSmokes = [];
-        let fallingAshes = [];
+        let messages = []; 
+        let bgSmokes = [];  
+        let fallingAshes = []; 
 
-        let TOTAL_TIME = 5 * 60 * 1000;
-        let startTime = null;
+        const TOTAL_TIME = 5 * 60 * 1000; 
+        const startTime = Date.now();
         const FIXED_FONT_SIZE = 14;
-        const AUTO_ASH_STEP = 25;
 
-        let isInhaling = false;
-        let inhaleStartedAt = null;
-        let pointerIsDown = false;
-        let lastAutoAshIndex = -1;
-        let fireTick = 0;
-        let renderStarted = false;
-        let serverClockOffset = 0;
-
-        let currentRoomId = null;
-        let currentRoomOccupants = 0;
-        let currentRoomCapacity = 0;
+        let isInhaling = false; // 흡입 중 여부
+        let inhaleTimer = 0;
 
         const CIG = {
-            baseY: canvas.height - 20,
-            fullLen: 100,
-            filterLen: 25,
+            baseY: canvas.height - 20, 
+            fullLen: 100, 
+            filterLen: 25, 
             pSize: 6,
-            lastAshFallLen: 0
+            lastAshFallLen: 0 
         };
 
-        let ws = null;
-
-        function mulberry32(seed) {
-            let t = seed >>> 0;
-            return () => {
-                t += 0x6D2B79F5;
-                let r = Math.imul(t ^ (t >>> 15), t | 1);
-                r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
-                return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-            };
-        }
-
-        function toSeed(value) {
-            const str = String(value);
-            let hash = 2166136261;
-            for (let i = 0; i < str.length; i++) {
-                hash ^= str.charCodeAt(i);
-                hash = Math.imul(hash, 16777619);
-            }
-            return hash >>> 0;
-        }
-
-        function toClientTime(serverTime) {
-            if (typeof serverTime !== 'number' || Number.isNaN(serverTime)) {
-                return Date.now();
-            }
-
-            return serverTime + serverClockOffset;
-        }
-
-        function syncTimer(data) {
-            TOTAL_TIME = Number(data.totalTime) || (5 * 60 * 1000);
-
-            if (typeof data.serverTime === 'number') {
-                serverClockOffset = Date.now() - data.serverTime;
-            }
-
-            if (typeof data.remainingTime === 'number') {
-                const elapsed = Math.max(TOTAL_TIME - data.remainingTime, 0);
-                startTime = Date.now() - elapsed;
-                return;
-            }
-
-            if (typeof data.startTime === 'number') {
-                startTime = toClientTime(data.startTime);
-                return;
-            }
-
-            startTime = Date.now();
-        }
-
-        function getBurnMetrics(at = Date.now()) {
-            if (!startTime) {
-                return {
-                    elapsed: 0,
-                    remaining: TOTAL_TIME,
-                    ratio: 0,
-                    burnableLen: CIG.fullLen - CIG.filterLen,
-                    burnLen: 0,
-                    currentBodyLen: CIG.fullLen - CIG.filterLen,
-                    topY: CIG.baseY - CIG.fullLen
-                };
-            }
-
-            const elapsed = Math.max(at - startTime, 0);
-            const remaining = Math.max(TOTAL_TIME - elapsed, 0);
-            const ratio = Math.min(elapsed / TOTAL_TIME, 1);
-            const burnableLen = CIG.fullLen - CIG.filterLen;
-            const burnLen = burnableLen * ratio;
-
-            return {
-                elapsed,
-                remaining,
-                ratio,
-                burnableLen,
-                burnLen,
-                currentBodyLen: burnableLen - burnLen,
-                topY: CIG.baseY - CIG.fullLen + burnLen
-            };
-        }
-
-        function updateStatus(text, isConnected = false) {
-            statusText.textContent = text;
-            sendBtn.disabled = !isConnected;
-            msgInput.disabled = !isConnected;
-        }
-
-        function updateRoomInfo() {
-            if (!currentRoomId) {
-                roomInfoText.textContent = 'ROOM: ---';
-                return;
-            }
-
-            roomInfoText.textContent =
-                `ROOM: ${currentRoomId} (${currentRoomOccupants}/${currentRoomCapacity})`;
-        }
-
-        function spawnMessageSmoke(text, serverTime) {
-            const metrics = getBurnMetrics(serverTime);
-            messages.push(new MessageSmoke(text, canvas.width / 2, metrics.topY - 10, serverTime));
-        }
-
-        function spawnAshBurst(serverTime, burnLen, count) {
-            const y = CIG.baseY - CIG.fullLen + burnLen;
-            for (let i = 0; i < count; i++) {
-                fallingAshes.push(
-                    new FallingAsh(canvas.width / 2, y, `${serverTime}:ash:${i}`, serverTime)
-                );
-            }
-            CIG.lastAshFallLen = Math.max(CIG.lastAshFallLen, burnLen);
-        }
-
-        function spawnDenseSmoke(serverTime, count = 5) {
-            const metrics = getBurnMetrics(serverTime);
-            for (let i = 0; i < count; i++) {
-                bgSmokes.push(new BackgroundSmoke(
-                    canvas.width / 2,
-                    metrics.topY,
-                    `${serverTime}:dense:${i}`,
-                    serverTime,
-                    true
-                ));
-            }
-        }
-
-        function sendWsMessage(payload) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                return false;
-            }
-
-            ws.send(JSON.stringify(payload));
-            return true;
-        }
-
-        function handleSocketMessage(data) {
-            if (data.type === 'room_assigned') {
-                currentRoomId = data.roomId || null;
-                currentRoomOccupants = Number(data.occupants) || 0;
-                currentRoomCapacity = Number(data.capacity) || 0;
-                updateRoomInfo();
-                return;
-            }
-
-            if (data.type === 'room_info') {
-                currentRoomId = data.roomId || currentRoomId;
-                currentRoomOccupants = Number(data.occupants) || 0;
-                currentRoomCapacity = Number(data.capacity) || currentRoomCapacity;
-                updateRoomInfo();
-                return;
-            }
-
-            if (data.type === 'timer_sync') {
-                syncTimer(data);
-                CIG.lastAshFallLen = 0;
-                lastAutoAshIndex = -1;
-                return;
-            }
-
-            if (data.type === 'animation_state') {
-                isInhaling = Boolean(data.isInhaling);
-                inhaleStartedAt = data.inhalingSince ? toClientTime(data.inhalingSince) : null;
-                return;
-            }
-
-            if (data.type === 'chat') {
-                spawnMessageSmoke(data.message,data.x,data.y,serverTime);
-                return;
-            }
-
-            if (data.type === 'inhale_start') {
-                isInhaling = true;
-                inhaleStartedAt = toClientTime(data.serverTime);
-                return;
-            }
-
-            if (data.type === 'inhale_end') {
-                if (typeof data.serverTime === 'number') {
-                    spawnDenseSmoke(toClientTime(data.serverTime));
-                }
-                isInhaling = false;
-                inhaleStartedAt = null;
-                return;
-            }
-
-            if (data.type === 'ash_drop') {
-                spawnAshBurst(
-                    toClientTime(data.serverTime),
-                    Number(data.burnLen) || 0,
-                    data.source === 'click' ? 12 : 6
-                );
-            }
-        }
-
-        function connectWebSocket() {
-            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${location.host}/ws`;
-
-            ws = new WebSocket(wsUrl);
-            updateStatus('CONNECTING...', false);
-
-            ws.onopen = () => {
-                updateStatus('CONNECTED', true);
-            };
-
-            ws.onmessage = (event) => {
-                let data;
-                try {
-                    data = JSON.parse(event.data);
-                } catch (error) {
-                    console.error('Invalid message JSON:', error);
-                    return;
-                }
-
-                handleSocketMessage(data);
-            };
-
-            ws.onclose = () => {
-                updateStatus('DISCONNECTED - RETRYING...', false);
-                currentRoomId = null;
-                currentRoomOccupants = 0;
-                currentRoomCapacity = 0;
-                updateRoomInfo();
-
-                setTimeout(() => {
-                    connectWebSocket();
-                }, 3000);
-            };
-
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-            };
-        }
-
         class FallingAsh {
-            constructor(x, y, seedKey, startTimeMs) {
-                const rand = mulberry32(toSeed(seedKey));
-                this.startTime = startTimeMs || Date.now();
-                this.size = 1 + rand() * 3;
-                this.vy = 0.2;
-                this.vx = (rand() - 0.5) * 1.5;
-                this.opacity = 1.0;
-                this.x = x + ((rand() - 0.5) * 6);
+            constructor(x, y) {
+                this.x = x + (Math.random() - 0.5) * 6;
                 this.y = y;
+                this.size = 1 + Math.random() * 3;
+                this.vy = 0.2;
+                this.vx = (Math.random() - 0.5) * 1.5;
+                this.opacity = 1.0;
             }
-
-            update(now = Date.now()) {
+            update() {
                 this.vy += 0.08;
                 this.y += this.vy;
                 this.x += this.vx;
                 this.opacity -= 0.02;
                 return this.y < canvas.height && this.opacity > 0;
             }
-
             draw() {
                 ctx.globalAlpha = this.opacity;
-                ctx.fillStyle = '#444';
+                ctx.fillStyle = "#444";
                 ctx.fillRect(Math.floor(this.x), Math.floor(this.y), this.size, this.size);
                 ctx.globalAlpha = 1.0;
             }
         }
 
         class MessageSmoke {
-            constructor(text, x, y, startTimeMs) {
-                const rand = mulberry32(toSeed(`${text}:${startTimeMs}`));
-                this.text = text;
-                this.startTime = startTimeMs || Date.now();
-                this.lifeTime = 5000;
-                this.vx = (rand() - 0.5) * 0.4;
+            constructor(text, x, y) {
+                this.text = text; // 대문자 변환 삭제
+                this.x = x; this.y = y;
+                this.startTime = Date.now();
+                this.lifeTime = 5000; 
+                this.vx = (Math.random() - 0.5) * 0.4;
                 this.vy = -0.6;
-                this.progress = 0;
-                this.x = x;
-                this.y = y;
             }
-
-            update(now = Date.now()) {
-                const age = Math.max(now - this.startTime, 0);
+            update() {
+                const age = Date.now() - this.startTime;
                 this.progress = age / this.lifeTime;
-                this.x += (Math.sin(age * 0.005) * 0.2) + this.vx;
+                this.x += Math.sin(age * 0.005) * 0.2 + this.vx;
                 this.y += this.vy;
                 return this.progress < 1;
             }
-
             draw() {
                 ctx.save();
-                const alpha = (this.progress > 0.6)
-                    ? 1 - ((this.progress - 0.6) / 0.4)
-                    : 1;
-
+                let alpha = (this.progress > 0.6) ? 1 - ((this.progress - 0.6) / 0.4) : 1;
                 ctx.globalAlpha = Math.max(alpha, 0);
-                ctx.fillStyle = '#FFFFFF';
-                ctx.font = `${FIXED_FONT_SIZE}px 'VT323', monospace`;
-                ctx.textAlign = 'center';
+                ctx.fillStyle = "#FFFFFF";
+                ctx.font = `${FIXED_FONT_SIZE}px 'VT323'`;
+                ctx.textAlign = "center";
                 ctx.fillText(this.text, Math.floor(this.x), Math.floor(this.y));
                 ctx.restore();
             }
         }
 
         class BackgroundSmoke {
-            constructor(x, y, seedKey, startTimeMs, isDense = false) {
-                const rand = mulberry32(toSeed(seedKey));
-                this.startTime = startTimeMs || Date.now();
+            constructor(x, y, isDense = false) {
+                this.x = x; this.y = y;
+                this.startTime = Date.now();
                 this.lifeTime = isDense ? 4000 : 8000;
-                this.size = isDense ? 8 + rand() * 10 : 4 + rand() * 6;
-                this.vx = (rand() - 0.5) * 0.5;
+                this.size = isDense ? 8 + Math.random()*10 : 4 + Math.random()*6;
+                this.vx = (Math.random() - 0.5) * 0.5;
                 this.vy = isDense ? -1.2 : -0.3;
                 this.alphaMax = isDense ? 0.6 : 0.2;
-                this.progress = 0;
-                this.x = x;
-                this.y = y;
             }
-
-            update(now = Date.now()) {
-                const age = Math.max(now - this.startTime, 0);
+            update() {
+                const age = Date.now() - this.startTime;
                 this.progress = age / this.lifeTime;
                 this.y += this.vy;
                 this.x += this.vx;
                 return this.progress < 1;
             }
-
             draw() {
                 ctx.save();
                 ctx.globalAlpha = this.alphaMax * (1 - this.progress);
-                ctx.fillStyle = '#888';
+                ctx.fillStyle = "#888";
                 ctx.beginPath();
-                ctx.arc(
-                    Math.floor(this.x),
-                    Math.floor(this.y),
-                    this.size * (1 + this.progress),
-                    0,
-                    Math.PI * 2
-                );
+                ctx.arc(Math.floor(this.x), Math.floor(this.y), this.size * (1 + this.progress), 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
             }
         }
 
+        // --- 상호작용 이벤트 ---
         canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
             const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
             const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            
             const centerX = canvas.width / 2;
-            const metrics = getBurnMetrics();
+            const elapsed = Date.now() - startTime;
+            const ratio = Math.min(elapsed / TOTAL_TIME, 1);
+            const burnLen = (CIG.fullLen - CIG.filterLen) * ratio;
+            const topY = CIG.baseY - CIG.fullLen + burnLen;
 
-            if (Math.abs(mouseX - centerX) < 20 && Math.abs(mouseY - metrics.topY) < 30) {
-                if (metrics.burnLen > CIG.lastAshFallLen) {
-                    sendWsMessage({
-                        type: 'ash_drop',
-                        source: 'click',
-                        burnLen: metrics.burnLen
-                    });
+            // 1. 담배 끝(재) 클릭 시 털기
+            if (Math.abs(mouseX - centerX) < 20 && Math.abs(mouseY - topY) < 30) {
+                if (burnLen > CIG.lastAshFallLen) {
+                    for(let i=0; i<12; i++) fallingAshes.push(new FallingAsh(centerX, topY));
+                    CIG.lastAshFallLen = burnLen;
                 }
             }
 
+            // 2. 필터 부분 클릭 시 흡입 시작
             if (Math.abs(mouseX - centerX) < 15 && mouseY > CIG.baseY - CIG.filterLen - 10) {
-                pointerIsDown = true;
-                sendWsMessage({ type: 'inhale_start' });
+                isInhaling = true;
             }
         });
 
         window.addEventListener('mouseup', () => {
-            if (pointerIsDown) {
-                sendWsMessage({ type: 'inhale_end' });
+            if (isInhaling) {
+                // 손을 떼면 연기가 한꺼번에 나옴
+                const ratio = Math.min((Date.now() - startTime) / TOTAL_TIME, 1);
+                const burnLen = (CIG.fullLen - CIG.filterLen) * ratio;
+                const topY = CIG.baseY - CIG.fullLen + burnLen;
+                for(let i=0; i<5; i++) bgSmokes.push(new BackgroundSmoke(canvas.width / 2, topY, true));
             }
-            pointerIsDown = false;
+            isInhaling = false;
         });
 
         function render() {
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(TOTAL_TIME - elapsed, 0);
+            const ratio = Math.min(elapsed / TOTAL_TIME, 1);
 
-            const now = Date.now();
-            const metrics = getBurnMetrics(now);
-            const m = Math.floor(metrics.remaining / 60000);
-            const s = Math.floor((metrics.remaining % 60000) / 1000);
+            const m = Math.floor(remaining / 60000);
+            const s = Math.floor((remaining % 60000) / 1000);
             timerText.innerText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 
             const centerX = canvas.width / 2;
-            const autoAshIndex = Math.floor(metrics.burnLen / AUTO_ASH_STEP);
+            const burnableLen = CIG.fullLen - CIG.filterLen;
+            const burnLen = burnableLen * ratio;
+            const currentBodyLen = burnableLen - burnLen;
+            const topY = CIG.baseY - CIG.fullLen + burnLen;
 
-            if (startTime && autoAshIndex > lastAutoAshIndex) {
-                for (let i = lastAutoAshIndex + 1; i <= autoAshIndex; i++) {
-                    if (i <= 0) continue;
-
-                    const burnLen = i * AUTO_ASH_STEP;
-                    if (burnLen <= metrics.burnableLen) {
-                        spawnAshBurst(
-                            startTime + ((burnLen / metrics.burnableLen) * TOTAL_TIME),
-                            burnLen,
-                            6
-                        );
-                    }
-                }
-                lastAutoAshIndex = autoAshIndex;
+            // 자동 재 떨어짐 (클릭 안 해도 너무 길어지면 낙하)
+            if (burnLen - CIG.lastAshFallLen > 25) {
+                for(let i=0; i<6; i++) fallingAshes.push(new FallingAsh(centerX, CIG.baseY - CIG.fullLen + CIG.lastAshFallLen));
+                CIG.lastAshFallLen = burnLen;
             }
 
-            if (metrics.remaining > 0) {
-                const ashHeight = Math.max(metrics.burnLen - CIG.lastAshFallLen, 0);
-
-                ctx.fillStyle = '#222';
-                ctx.fillRect(
-                    centerX - (CIG.pSize / 2),
-                    CIG.baseY - CIG.fullLen + CIG.lastAshFallLen,
-                    CIG.pSize,
-                    ashHeight
-                );
-
-                ctx.fillStyle = '#CD853F';
-                ctx.fillRect(
-                    centerX - (CIG.pSize / 2),
-                    CIG.baseY - CIG.filterLen,
-                    CIG.pSize,
-                    CIG.filterLen
-                );
-
-                ctx.fillStyle = '#DDD';
-                ctx.fillRect(
-                    centerX - (CIG.pSize / 2),
-                    CIG.baseY - CIG.filterLen - metrics.currentBodyLen,
-                    CIG.pSize,
-                    metrics.currentBodyLen
-                );
-
-                fireTick += 1;
+            if (remaining > 0) {
+                // 매달린 재
+                ctx.fillStyle = "#222";
+                ctx.fillRect(centerX - (CIG.pSize/2), CIG.baseY - CIG.fullLen + CIG.lastAshFallLen, CIG.pSize, burnLen - CIG.lastAshFallLen);
+                // 필터
+                ctx.fillStyle = "#CD853F"; 
+                ctx.fillRect(centerX - (CIG.pSize/2), CIG.baseY - CIG.filterLen, CIG.pSize, CIG.filterLen);
+                // 몸통
+                ctx.fillStyle = "#DDD";
+                ctx.fillRect(centerX - (CIG.pSize/2), CIG.baseY - CIG.filterLen - currentBodyLen, CIG.pSize, currentBodyLen);
+                
+                // 불꽃 효과 (흡입 시 더 커짐)
                 const fireSize = isInhaling ? CIG.pSize + 4 : CIG.pSize + 2;
-                ctx.fillStyle = Math.random() > (isInhaling ? 0.05 : 0.2) ? '#FF4400' : '#FFCC00';
-                ctx.fillRect(centerX - (fireSize / 2), metrics.topY - 2, fireSize, isInhaling ? 6 : 4);
+                ctx.fillStyle = (Math.random() > (isInhaling ? 0.05 : 0.2)) ? "#FF4400" : "#FFCC00";
+                ctx.fillRect(centerX - (fireSize/2), topY - 2, fireSize, isInhaling ? 6 : 4);
             }
 
-            fallingAshes = fallingAshes.filter((ash) => ash.update(now) && (ash.draw() || true));
-            bgSmokes = bgSmokes.filter((smoke) => smoke.update(now) && (smoke.draw() || true));
-            messages = messages.filter((message) => message.update(now) && (message.draw() || true));
+            // 배열 업데이트 및 렌더링
+            fallingAshes = fallingAshes.filter(a => a.update() && (a.draw() || true));
+            bgSmokes = bgSmokes.filter(s => s.update() && (s.draw() || true));
+            messages = messages.filter(m => m.update() && (m.draw() || true));
 
             requestAnimationFrame(render);
         }
 
-        function startRenderLoop() {
-            if (renderStarted) return;
-            renderStarted = true;
-            render();
-        }
-
         function send() {
             const val = msgInput.value.trim();
+
             if (!val) return;
 
-            if (!sendWsMessage({
-                type: 'chat',
-                message: val
-            })) {
-                alert('WebSocket is not connected yet.');
+            if (socket.readyState !== WebSocket.OPEN) {
+                console.warn('WebSocket is not connected');
                 return;
             }
 
-            msgInput.value = '';
+            socket.send(JSON.stringify({
+                type: 'chat',
+                message: val
+            }));
+
+            msgInput.value = "";
         }
 
         sendBtn.onclick = send;
-        msgInput.onkeypress = (e) => {
-            if (e.key === 'Enter') send();
-        };
-
-        connectWebSocket();
-        startRenderLoop();
-
-        if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.catch(() => {});
-        }
+        msgInput.onkeypress = (e) => { if(e.key === 'Enter') send(); };
+        document.fonts.ready.then(render);
     </script>
 </body>
 </html>

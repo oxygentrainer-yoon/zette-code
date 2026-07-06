@@ -4,11 +4,11 @@ const { Pool } = require('pg');
 const app = express();
 const PORT = 4000;
 const pool = new Pool({
-    host: '127.0.0.1',
+    host: process.env.DB_HOST || 'db',
     port: 5432,
-    database: 'tabacomyu_filter',
-    user: 'filter_user',
-    password: 'filter_pass'
+    database: 'tabacomyu',
+    user: 'tabacomyu_user',
+    password: 'tabacomyu_pass'
 });
 
 

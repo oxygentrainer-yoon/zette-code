@@ -82,6 +82,29 @@
         const sendBtn = document.getElementById('sendBtn');
         const timerText = document.getElementById('timer');
 
+        const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+
+        socket.onopen = () => {
+            console.log('WebSocket connected');
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'chat') {
+                const ratio = Math.min((Date.now() - startTime) / TOTAL_TIME, 1);
+                const burnLen = (CIG.fullLen - CIG.filterLen) * ratio;
+                const spawnY = (CIG.baseY - CIG.fullLen + burnLen) - 10;
+
+                messages.push(new MessageSmoke(data.message, canvas.width / 2, spawnY));
+            }
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
         ctx.imageSmoothingEnabled = false;
 
         let messages = []; 
@@ -269,13 +292,20 @@
 
         function send() {
             const val = msgInput.value.trim();
-            if (val) {
-                const ratio = Math.min((Date.now() - startTime) / TOTAL_TIME, 1);
-                const burnLen = (CIG.fullLen - CIG.filterLen) * ratio;
-                const spawnY = (CIG.baseY - CIG.fullLen + burnLen) - 10;
-                messages.push(new MessageSmoke(val, canvas.width / 2, spawnY));
-                msgInput.value = "";
+
+            if (!val) return;
+
+            if (socket.readyState !== WebSocket.OPEN) {
+                console.warn('WebSocket is not connected');
+                return;
             }
+
+            socket.send(JSON.stringify({
+                type: 'chat',
+                message: val
+            }));
+
+            msgInput.value = "";
         }
 
         sendBtn.onclick = send;
