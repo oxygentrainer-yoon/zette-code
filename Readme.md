@@ -27,19 +27,19 @@ cd ~/zetta-code/docker
 ### 1. PostgreSQL 起動
 
 ```bash
-docker compose -f compose.db.yaml up -d
+docker compose --env-file ../.env -f compose.db.yaml up -d
 ```
 
 ### 2. App（gateway-ws + filter-service）起動
 
 ```bash
-docker compose -f compose.app.yaml up -d
+docker compose --env-file ../.env -f compose.app.yaml up -d
 ```
 
 ### 3. Web（nginx）起動
 
 ```bash
-docker compose -f compose.web.yaml up -d
+docker compose --env-file ../.env -f compose.web.yaml up -d
 ```
 
 ---
