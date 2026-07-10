@@ -118,6 +118,29 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+
+        .session-end-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            pointer-events: auto;
+            z-index: 20;
+        }
+
+        .session-end-text {
+            font-size: 28px;
+            color: #fff;
+            text-shadow: 2px 2px #000;
+            text-align: center;
+            padding: 0 20px;
+        }
     </style>
 </head>
 <body>
@@ -132,6 +155,11 @@
             <input type="text" id="msgInput" placeholder="SAY SOMETHING..." maxlength="20" autocomplete="off">
             <button id="sendBtn">SEND</button>
         </div>
+
+        <div id="sessionEndOverlay" class="session-end-overlay" style="display: none;">
+            <div class="session-end-text">YOUR CIGARETTE HAS BURNED OUT</div>
+            <button id="newSessionBtn">START NEW SESSION</button>
+        </div>
     </div>
 
     <script>
@@ -142,6 +170,8 @@
         const timerText = document.getElementById('timer');
         const statusText = document.getElementById('status');
         const roomInfoText = document.getElementById('roomInfo');
+        const sessionEndOverlay = document.getElementById('sessionEndOverlay');
+        const newSessionBtn = document.getElementById('newSessionBtn');
 
         ctx.imageSmoothingEnabled = false;
 
@@ -165,6 +195,9 @@
         let currentRoomId = null;
         let currentRoomOccupants = 0;
         let currentRoomCapacity = 0;
+
+        let myClientId = null;
+        let sessionEnded = false;
 
         const CIG = {
             baseY: canvas.height - 20,
@@ -270,6 +303,45 @@
                 `ROOM: ${currentRoomId} (${currentRoomOccupants}/${currentRoomCapacity})`;
         }
 
+        function showSessionEndOverlay() {
+            sessionEndOverlay.style.display = 'flex';
+            sendBtn.disabled = true;
+            msgInput.disabled = true;
+        }
+
+        function hideSessionEndOverlay() {
+            sessionEndOverlay.style.display = 'none';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                sendBtn.disabled = false;
+                msgInput.disabled = false;
+            }
+        }
+
+        function directionForClient(clientId) {
+            if (!clientId) {
+                return 'left';
+            }
+            return toSeed(clientId) % 2 === 0 ? 'left' : 'right';
+        }
+
+        function spawnAmbientSmoke(clientId, serverTime, count = 5) {
+            const side = directionForClient(clientId);
+            const y = (CIG.baseY - CIG.fullLen) + ((Math.random() * 20) - 10);
+            const originX = side === 'left' ? -20 : canvas.width + 20;
+            const driftVx = side === 'left' ? (0.6 + (Math.random() * 0.6)) : -(0.6 + (Math.random() * 0.6));
+
+            for (let i = 0; i < count; i++) {
+                bgSmokes.push(new BackgroundSmoke(
+                    originX,
+                    y,
+                    `${clientId}:${serverTime}:ambient:${i}`,
+                    serverTime,
+                    true,
+                    driftVx
+                ));
+            }
+        }
+
         function spawnMessageSmoke(text, x, y, serverTime) {
             const metrics = getBurnMetrics(serverTime);
             messages.push(new MessageSmoke(text, x, y, serverTime));
@@ -309,10 +381,13 @@
 
         function handleSocketMessage(data) {
             if (data.type === 'room_assigned') {
+                myClientId = data.clientId || myClientId;
                 currentRoomId = data.roomId || null;
                 currentRoomOccupants = Number(data.occupants) || 0;
                 currentRoomCapacity = Number(data.capacity) || 0;
                 updateRoomInfo();
+                sessionEnded = false;
+                hideSessionEndOverlay();
                 return;
             }
 
@@ -331,38 +406,41 @@
                 return;
             }
 
-            if (data.type === 'animation_state') {
-                isInhaling = Boolean(data.isInhaling);
-                inhaleStartedAt = data.inhalingSince ? toClientTime(data.inhalingSince) : null;
-                return;
-            }
-
             if (data.type === 'chat') {
                 spawnMessageSmoke(data.message, data.x, data.y, data.serverTime);
                 return;
             }
 
             if (data.type === 'inhale_start') {
-                isInhaling = true;
-                inhaleStartedAt = toClientTime(data.serverTime);
+                if (data.clientId === myClientId) {
+                    isInhaling = true;
+                    inhaleStartedAt = toClientTime(data.serverTime);
+                }
                 return;
             }
 
             if (data.type === 'inhale_end') {
-                if (typeof data.serverTime === 'number') {
-                    spawnDenseSmoke(toClientTime(data.serverTime));
+                if (data.clientId === myClientId) {
+                    if (typeof data.serverTime === 'number') {
+                        spawnDenseSmoke(toClientTime(data.serverTime));
+                    }
+                    isInhaling = false;
+                    inhaleStartedAt = null;
+                } else if (typeof data.serverTime === 'number') {
+                    spawnAmbientSmoke(data.clientId, toClientTime(data.serverTime));
                 }
-                isInhaling = false;
-                inhaleStartedAt = null;
                 return;
             }
 
-            if (data.type === 'ash_drop') {
-                spawnAshBurst(
-                    toClientTime(data.serverTime),
-                    Number(data.burnLen) || 0,
-                    data.source === 'click' ? 12 : 6
-                );
+            if (data.type === 'session_ended') {
+                sessionEnded = true;
+                isInhaling = false;
+                inhaleStartedAt = null;
+                currentRoomId = null;
+                currentRoomOccupants = 0;
+                currentRoomCapacity = 0;
+                updateRoomInfo();
+                showSessionEndOverlay();
             }
         }
 
@@ -471,12 +549,12 @@
         }
 
         class BackgroundSmoke {
-            constructor(x, y, seedKey, startTimeMs, isDense = false) {
+            constructor(x, y, seedKey, startTimeMs, isDense = false, driftVx = 0) {
                 const rand = mulberry32(toSeed(seedKey));
                 this.startTime = startTimeMs || Date.now();
                 this.lifeTime = isDense ? 4000 : 8000;
                 this.size = isDense ? 8 + rand() * 10 : 4 + rand() * 6;
-                this.vx = (rand() - 0.5) * 0.5;
+                this.vx = ((rand() - 0.5) * 0.5) + driftVx;
                 this.vy = isDense ? -1.2 : -0.3;
                 this.alphaMax = isDense ? 0.6 : 0.2;
                 this.progress = 0;
@@ -510,6 +588,8 @@
         }
 
         canvas.addEventListener('mousedown', (e) => {
+            if (sessionEnded) return;
+
             const rect = canvas.getBoundingClientRect();
             const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
             const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
@@ -518,11 +598,7 @@
 
             if (Math.abs(mouseX - centerX) < 20 && Math.abs(mouseY - metrics.topY) < 30) {
                 if (metrics.burnLen > CIG.lastAshFallLen) {
-                    sendWsMessage({
-                        type: 'ash_drop',
-                        source: 'click',
-                        burnLen: metrics.burnLen
-                    });
+                    spawnAshBurst(Date.now(), metrics.burnLen, 12);
                 }
             }
 
@@ -615,6 +691,8 @@
         }
 
         function send() {
+            if (sessionEnded) return;
+
             const val = msgInput.value.trim();
             if (!val) return;
 
@@ -631,6 +709,10 @@
 
         sendBtn.onclick = send;
         msgInput.onkeypress = (e) => { if (e.key === 'Enter') send(); };
+
+        newSessionBtn.onclick = () => {
+            sendWsMessage({ type: 'start_new_session' });
+        };
 
         connectWebSocket();
         startRenderLoop();
