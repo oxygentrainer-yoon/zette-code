@@ -84,11 +84,11 @@
 
         ctx.imageSmoothingEnabled = false;
 
-        let messages = []; 
-        let bgSmokes = [];  
-        let fallingAshes = []; 
+        let messages = [];
+        let bgSmokes = [];
+        let fallingAshes = [];
 
-        const TOTAL_TIME = 5 * 60 * 1000; 
+        const TOTAL_TIME = 5 * 60 * 1000;
         const startTime = Date.now();
         const FIXED_FONT_SIZE = 14;
 
@@ -96,11 +96,11 @@
         let inhaleTimer = 0;
 
         const CIG = {
-            baseY: canvas.height - 20, 
-            fullLen: 100, 
-            filterLen: 25, 
+            baseY: canvas.height - 20,
+            fullLen: 100,
+            filterLen: 25,
             pSize: 6,
-            lastAshFallLen: 0 
+            lastAshFallLen: 0
         };
 
         class FallingAsh {
@@ -132,7 +132,7 @@
                 this.text = text; // 대문자 변환 삭제
                 this.x = x; this.y = y;
                 this.startTime = Date.now();
-                this.lifeTime = 5000; 
+                this.lifeTime = 5000;
                 this.vx = (Math.random() - 0.5) * 0.4;
                 this.vy = -0.6;
             }
@@ -188,7 +188,7 @@
             const rect = canvas.getBoundingClientRect();
             const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
             const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
-            
+
             const centerX = canvas.width / 2;
             const elapsed = Date.now() - startTime;
             const ratio = Math.min(elapsed / TOTAL_TIME, 1);
@@ -247,12 +247,12 @@
                 ctx.fillStyle = "#222";
                 ctx.fillRect(centerX - (CIG.pSize/2), CIG.baseY - CIG.fullLen + CIG.lastAshFallLen, CIG.pSize, burnLen - CIG.lastAshFallLen);
                 // 필터
-                ctx.fillStyle = "#CD853F"; 
+                ctx.fillStyle = "#CD853F";
                 ctx.fillRect(centerX - (CIG.pSize/2), CIG.baseY - CIG.filterLen, CIG.pSize, CIG.filterLen);
                 // 몸통
                 ctx.fillStyle = "#DDD";
                 ctx.fillRect(centerX - (CIG.pSize/2), CIG.baseY - CIG.filterLen - currentBodyLen, CIG.pSize, currentBodyLen);
-                
+
                 // 불꽃 효과 (흡입 시 더 커짐)
                 const fireSize = isInhaling ? CIG.pSize + 4 : CIG.pSize + 2;
                 ctx.fillStyle = (Math.random() > (isInhaling ? 0.05 : 0.2)) ? "#FF4400" : "#FFCC00";
