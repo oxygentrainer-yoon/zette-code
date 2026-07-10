@@ -200,7 +200,6 @@
             if (typeof serverTime !== 'number' || Number.isNaN(serverTime)) {
                 return Date.now();
             }
-
             return serverTime + serverClockOffset;
         }
 
@@ -271,9 +270,9 @@
                 `ROOM: ${currentRoomId} (${currentRoomOccupants}/${currentRoomCapacity})`;
         }
 
-        function spawnMessageSmoke(text, serverTime) {
+        function spawnMessageSmoke(text, x, y, serverTime) {
             const metrics = getBurnMetrics(serverTime);
-            messages.push(new MessageSmoke(text, canvas.width / 2, metrics.topY - 10, serverTime));
+            messages.push(new MessageSmoke(text, x, y, serverTime));
         }
 
         function spawnAshBurst(serverTime, burnLen, count) {
@@ -339,7 +338,7 @@
             }
 
             if (data.type === 'chat') {
-                spawnMessageSmoke(data.message,data.x,data.y,serverTime);
+                spawnMessageSmoke(data.message, data.x, data.y, data.serverTime);
                 return;
             }
 
@@ -631,9 +630,7 @@
         }
 
         sendBtn.onclick = send;
-        msgInput.onkeypress = (e) => {
-            if (e.key === 'Enter') send();
-        };
+        msgInput.onkeypress = (e) => { if (e.key === 'Enter') send(); };
 
         connectWebSocket();
         startRenderLoop();
