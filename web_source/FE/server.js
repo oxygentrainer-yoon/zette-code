@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const crypto = require('crypto');
+const http = require('http');
 
 const PORT = process.env.WS_PORT || 3000;
 const TOTAL_TIME = 5 * 60 * 1000;
@@ -11,8 +12,40 @@ const FILTER_SERVICE_URL = process.env.FILTER_SERVICE_URL || 'http://127.0.0.1:4
 const rooms = new Map();
 let nextRoomNumber = 1;
 
+const httpServer = http.createServer((req, res) => {
+    if (req.method === 'POST' && req.url === '/internal/quote') {
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', () => {
+            let payload;
+            try {
+                payload = JSON.parse(body || '{}');
+            } catch (error) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'invalid_json' }));
+                return;
+            }
+
+            const text = String(payload.text || '').trim();
+            if (!text) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'text_required' }));
+                return;
+            }
+
+            broadcastQuote(text, payload.source || null);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+        });
+        return;
+    }
+
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not_found' }));
+});
+
 const wss = new WebSocket.Server({
-    port: PORT,
+    server: httpServer,
     path: '/ws'
 });
 
@@ -21,7 +54,9 @@ const {
     fetchDB
 } = require('./services/fetchDB');
 
-console.log(`WebSocket server started on port ${PORT}`);
+httpServer.listen(PORT, () => {
+    console.log(`WebSocket server started on port ${PORT}`);
+});
 
 function sendJson(ws, obj) {
     if (ws.readyState === WebSocket.OPEN) {
@@ -95,6 +130,11 @@ function broadcastToRoom(ws, obj) {
     }
 
     broadcastJson(room.clients, obj);
+}
+
+function broadcastQuote(text, source) {
+    const payload = { type: 'quote', text, source, serverTime: Date.now() };
+    rooms.forEach((room) => broadcastJson(room.clients, payload));
 }
 
 function removeFromRoom(ws) {
