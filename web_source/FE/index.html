@@ -442,6 +442,14 @@
                 updateRoomInfo();
                 showSessionEndOverlay();
             }
+
+            if (data.type === 'quote') {
+                const quoteText = `「${data.text}」 — ${data.source || '不明'}`;
+                const x = Math.floor(Math.random() * 380) + 50;
+                const y = Math.floor(Math.random() * 120) + 30;
+                spawnMessageSmoke(quoteText, x, y, data.serverTime);
+                return;
+            }
         }
 
         function connectWebSocket() {

@@ -1,8 +1,10 @@
 const express = require('express');
 const { Pool } = require('pg');
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.APP_PORT || process.env.FILTER_PORT || 4000;
+const GATEWAY_WS_URL = process.env.GATEWAY_WS_URL || 'http://127.0.0.1:3000';
 
 const pool = new Pool({
     host: process.env.DB_HOST || '127.0.0.1',
@@ -69,8 +71,8 @@ app.listen(PORT, () => {
     console.log(`filter-service started on port ${PORT}`);
 });
 
-// quote-schedulerから名言を受け取りブロードキャストするエンドポイント
-app.post('/internal/quote', (req, res) => {
+// quote-schedulerから名言を受け取りgateway-wsへ転送するエンドポイント
+app.post('/internal/quote', async (req, res) => {
     const { text, source } = req.body;
 
     if (!text || !source) {
@@ -79,7 +81,12 @@ app.post('/internal/quote', (req, res) => {
 
     console.log(`[internal/quote] 受信: "${text}" / ${source}`);
 
-    // TODO: WebSocketでブロードキャスト（gateway-ws実装時に追加）
-
-    return res.json({ status: 'ok' });
+    try {
+        await axios.post(`${GATEWAY_WS_URL}/internal/quote`, { text, source });
+        console.log(`[internal/quote] gateway-wsへ転送OK`);
+        return res.json({ status: 'ok' });
+    } catch (err) {
+        console.error(`[internal/quote] gateway-ws転送失敗: ${err.message}`);
+        return res.status(500).json({ error: 'gateway_error' });
+    }
 });
