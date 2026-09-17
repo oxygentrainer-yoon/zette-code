@@ -42,6 +42,12 @@ docker compose --env-file ../.env -f compose.app.yaml up -d
 docker compose --env-file ../.env -f compose.web.yaml up -d
 ```
 
+### 4. Quote Scheduler（名言定期配信）起動
+
+```bash
+docker compose --env-file ../.env -f compose.quote-scheduler.yaml up -d
+```
+
 ---
 
 ## 起動確認
@@ -58,6 +64,7 @@ docker ps
 tabacomyu-db
 tabacomyu-app
 tabacomyu-web
+tabacomyu-quote-scheduler
 ```
 
 ---
@@ -82,25 +89,37 @@ docker logs -f tabacomyu-web
 docker logs -f tabacomyu-db
 ```
 
+### quote-scheduler
+
+```bash
+docker logs -f tabacomyu-quote-scheduler
+```
+
 ---
 
 ## Docker コンテナ停止
 
 起動とは逆順で停止します。
 
-### 1. Web 停止
+### 1. Quote Scheduler 停止
+
+```bash
+docker compose -f compose.quote-scheduler.yaml down
+```
+
+### 2. Web 停止
 
 ```bash
 docker compose -f compose.web.yaml down
 ```
 
-### 2. App 停止
+### 3. App 停止
 
 ```bash
 docker compose -f compose.app.yaml down
 ```
 
-### 3. DB 停止
+### 4. DB 停止
 
 ```bash
 docker compose -f compose.db.yaml down
