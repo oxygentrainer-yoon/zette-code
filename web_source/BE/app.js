@@ -68,3 +68,18 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
     console.log(`filter-service started on port ${PORT}`);
 });
+
+// quote-schedulerから名言を受け取りブロードキャストするエンドポイント
+app.post('/internal/quote', (req, res) => {
+    const { text, source } = req.body;
+
+    if (!text || !source) {
+        return res.status(400).json({ error: 'text and source are required' });
+    }
+
+    console.log(`[internal/quote] 受信: "${text}" / ${source}`);
+
+    // TODO: WebSocketでブロードキャスト（gateway-ws実装時に追加）
+
+    return res.json({ status: 'ok' });
+});

@@ -1,0 +1,16 @@
+services:
+  quote-scheduler:
+    build:
+      context: ..
+      dockerfile: docker/quote-scheduler/Dockerfile
+    container_name: tabacomyu-quote-scheduler
+    environment:
+      GATEWAY_URL: ${GATEWAY_URL:-http://tabacomyu-app:4000}
+      INTERVAL_MS: ${INTERVAL_MS:-30000}
+    networks:
+      - tabacomyu-net
+    restart: unless-stopped
+
+networks:
+  tabacomyu-net:
+    external: true

@@ -1,39 +1,21 @@
 'use strict';
 
-const db = require('./db');
+const fs   = require('fs');
+const path = require('path');
+
+const QUOTES_PATH = path.join(__dirname, 'quotes.json');
+
+// JSONファイルから名言を読み込む
+const quotes = JSON.parse(fs.readFileSync(QUOTES_PATH, 'utf-8'));
 
 /**
- * DBからランダムに名言を1件取得する
- * @returns {{ id: number, text: string, author: string } | null}
+ * ランダムに名言を1件返す
+ * @returns {{ text: string, author: string } | null}
  */
 function fetchRandomQuote() {
-  const quote = db
-    .prepare('SELECT id, text, author FROM quotes ORDER BY RANDOM() LIMIT 1')
-    .get();
-
-  if (!quote) {
-    console.warn('[quoteLoader] DBに名言が登録されていません');
-    return null;
-  }
-
-  return quote;
+  if (quotes.length === 0) return null;
+  const index = Math.floor(Math.random() * quotes.length);
+  return quotes[index];
 }
 
-/**
- * 名言を1件登録する（seed.jsから呼び出し）
- * @param {string} text
- * @param {string} author
- */
-function insertQuote(text, author = '不明') {
-  db.prepare('INSERT INTO quotes (text, author) VALUES (?, ?)').run(text, author);
-}
-
-/**
- * 全件取得（確認用）
- * @returns {Array}
- */
-function findAll() {
-  return db.prepare('SELECT * FROM quotes ORDER BY id').all();
-}
-
-module.exports = { fetchRandomQuote, insertQuote, findAll };
+module.exports = { fetchRandomQuote };
