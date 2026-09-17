@@ -21,7 +21,7 @@ docker network create tabacomyu-net
 dockerディレクトリへ移動します。
 
 ```bash
-cd ~/zetta-code/docker
+cd /home/zette-code/docker
 ```
 
 ### 1. PostgreSQL 起動
